@@ -106,6 +106,25 @@ function onEdit(e) {
     setTimeout(() => setCopied(false), 2000);
   };
 
+  // Real-time URL and ID length validation check
+  const getUrlWarning = () => {
+    if (!appScriptUrl) return null;
+    const urlClean = appScriptUrl.trim();
+    if (urlClean.includes("script.google.com/macros/s/")) {
+      const parts = urlClean.split("script.google.com/macros/s/");
+      if (parts.length === 2) {
+        const idSegment = parts[1].split("?")[0].split("/")[0].trim();
+        if (idSegment.length > 0 && idSegment.length < 50) {
+          return `ID Web App tampaknya terpotong (${idSegment.length} karakter). ID Web App yang valid biasanya 70-80 karakter (diawali 'AKfycb...'). Coba salin ulang secara utuh.`;
+        }
+      }
+    } else if (urlClean.length > 0 && !urlClean.startsWith("https://script.google.com")) {
+      return "URL tidak valid. Harus berupa URL Google Apps Script Web App yang diawali dengan 'https://script.google.com/macros/s/'";
+    }
+    return null;
+  };
+  const urlWarning = getUrlWarning();
+
   return (
     <div id="appscript_view" className="grid grid-cols-1 xl:grid-cols-5 gap-6">
       
@@ -228,6 +247,12 @@ function onEdit(e) {
               placeholder="https://script.google.com/macros/s/.../exec"
               className="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-medium focus:outline-none focus:ring-2 focus:ring-amber-500/20 focus:border-amber-500 text-slate-700"
             />
+            {urlWarning && (
+              <div className="p-3 bg-amber-50 border border-amber-200 text-amber-800 rounded-xl text-[10.5px] leading-normal font-medium flex gap-2 items-start animate-fade-in">
+                <AlertTriangle className="w-4 h-4 text-amber-600 shrink-0 mt-0.5" />
+                <span>{urlWarning}</span>
+              </div>
+            )}
           </div>
 
           {/* Test Status feedback */}

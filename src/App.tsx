@@ -389,9 +389,21 @@ export default function App() {
             }
           }
 
-          const proxyUrl = `/api/proxy-appscript?url=${encodeURIComponent(targetUrl)}`;
-          const response = await fetch(proxyUrl);
-          if (response.ok) {
+          let response;
+          try {
+            const proxyUrl = `/api/proxy-appscript?url=${encodeURIComponent(targetUrl)}`;
+            response = await fetch(proxyUrl);
+            if (!response.ok && response.status === 404) {
+              // Fallback to direct browser fetch if the proxy endpoint returns 404 (e.g. on Vercel static)
+              console.log("[SYNC] Proxy API returned 404 (running on Vercel or static host). Fetching Google Apps Script directly from browser...");
+              response = await fetch(targetUrl);
+            }
+          } catch (proxyFetchErr) {
+            console.log("[SYNC] Proxy fetch failed. Fetching Google Apps Script directly from browser...", proxyFetchErr);
+            response = await fetch(targetUrl);
+          }
+
+          if (response && response.ok) {
             const json = await response.json();
             if (json.status === 'success' && Array.isArray(json.data)) {
               isAppScriptSync = true;
@@ -482,10 +494,21 @@ export default function App() {
       if (!isAppScriptSync) {
         const { sheetId, gid } = parseSpreadsheetUrl(activeConfig.spreadsheetUrl);
         const csvUrl = `https://docs.google.com/spreadsheets/d/${sheetId}/export?format=csv&gid=${gid}`;
-        const proxyUrl = `/api/proxy-appscript?url=${encodeURIComponent(csvUrl)}`;
         
-        const response = await fetch(proxyUrl);
-        if (!response.ok) {
+        let response;
+        try {
+          const proxyUrl = `/api/proxy-appscript?url=${encodeURIComponent(csvUrl)}`;
+          response = await fetch(proxyUrl);
+          if (!response.ok && response.status === 404) {
+            console.log("[SYNC] Proxy API returned 404 for CSV. Fetching spreadsheet CSV directly...");
+            response = await fetch(csvUrl);
+          }
+        } catch (csvFetchErr) {
+          console.log("[SYNC] Proxy fetch for CSV failed. Fetching directly...", csvFetchErr);
+          response = await fetch(csvUrl);
+        }
+
+        if (!response || !response.ok) {
           throw new Error('Gagal mengunduh file spreadsheet. Pastikan dokumen diatur ke "Siapa saja dengan link dapat melihat".');
         }
 
@@ -558,28 +581,63 @@ export default function App() {
     setTestMessage('Mencoba menyambungkan ke Google Apps Script Web App...');
 
     let cleanedUrl = url.trim();
+    let isTruncated = false;
+    let extractedId = '';
     
     // Auto-fix: if the user forgot '/exec' at the end of the Google Apps Script URL, append it automatically
     if (cleanedUrl.includes("script.google.com/macros/s/")) {
       const parts = cleanedUrl.split("script.google.com/macros/s/");
       if (parts.length === 2) {
         const idSegment = parts[1];
+        extractedId = idSegment.split("?")[0].split("/")[0].trim();
+        
+        // Validate length of Google Apps Script Deployment ID
+        if (extractedId.length < 50) {
+          isTruncated = true;
+        }
+
         if (!idSegment.includes("/exec")) {
-          const idClean = idSegment.split("?")[0].split("/")[0].trim();
-          cleanedUrl = `https://script.google.com/macros/s/${idClean}/exec`;
+          cleanedUrl = `https://script.google.com/macros/s/${extractedId}/exec`;
         }
       }
     }
 
+    if (isTruncated) {
+      setTestStatus('error');
+      setTestMessage(`Koneksi Gagal: ID Web App Anda (${extractedId}) terlalu pendek (${extractedId.length} karakter). ID deployment asli dari Google Apps Script Web App yang valid biasanya terdiri dari 70-80 karakter (contoh diawali: "AKfycb..."). Silakan cek kembali dan salin URL lengkap dari menu Terapkan > Penerapan baru.`);
+      return;
+    }
+
     try {
-      const proxyUrl = `/api/proxy-appscript?url=${encodeURIComponent(cleanedUrl)}`;
-      const res = await fetch(proxyUrl);
+      let res;
+      try {
+        const proxyUrl = `/api/proxy-appscript?url=${encodeURIComponent(cleanedUrl)}`;
+        res = await fetch(proxyUrl);
+        if (!res.ok && res.status === 404) {
+          console.log("[TEST] Proxy API returned 404 (running on Vercel). Fetching Apps Script directly from browser...");
+          res = await fetch(cleanedUrl);
+        }
+      } catch (proxyErr) {
+        console.log("[TEST] Proxy fetch failed. Fetching Apps Script directly from browser...", proxyErr);
+        res = await fetch(cleanedUrl);
+      }
+
+      if (!res) {
+        throw new Error("Gagal melakukan permintaan koneksi.");
+      }
+
       if (!res.ok) {
         let errMsg = `HTTP Error: ${res.status}`;
         try {
           const errData = await res.json();
           if (errData && errData.error) errMsg = errData.error;
         } catch (_) {}
+
+        if (res.status === 404) {
+          errMsg = `HTTP Error 404: Tautan tidak ditemukan. Pastikan Anda telah menyalin seluruh URL Web App dari menu Terapkan (Deploy) > Penerapan baru (New deployment), bukan dari URL bilah alamat browser atau Editor Apps Script!`;
+        } else if (res.status === 401 || res.status === 403) {
+          errMsg = `HTTP Error ${res.status}: Akses Ditolak. Pastikan pengaturan Web App Anda adalah "Who has access: Anyone" (Siapa saja) dan "Execute as: Me" (Saya), lalu deploy ulang!`;
+        }
         throw new Error(errMsg);
       }
       
@@ -587,7 +645,7 @@ export default function App() {
       try {
         json = await res.json();
       } catch (jsonErr) {
-        throw new Error("Web App mengembalikan data non-JSON (Format Tidak Valid). Pastikan Anda telah men-deploy ulang Apps Script sebagai Web App baru, dan akses diatur ke 'Anyone' (Siapa saja) serta 'Execute as: Me'.");
+        throw new Error("Web App mengembalikan data non-JSON (HTML/Format Tidak Valid). Pastikan Anda telah men-deploy ulang Apps Script sebagai Web App baru, dan akses diatur ke 'Anyone' (Siapa saja) serta 'Execute as: Me'.");
       }
       
       if (json.status === 'success' && Array.isArray(json.data)) {
