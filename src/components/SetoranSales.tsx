@@ -167,25 +167,68 @@ export default function SetoranSales({ transactions, salesNames }: SetoranSalesP
 
       // Header Block
       doc.setFillColor(15, 23, 42);
-      doc.rect(8, 8, 132, 25, 'F');
+      doc.rect(8, 8, 132, 34, 'F');
+
+      // Helper to draw filled diamond in PDF
+      const drawPdfFilledDiamond = (cx: number, cy: number, halfSize: number, r: number, g: number, b: number) => {
+        doc.setFillColor(r, g, b);
+        doc.triangle(cx, cy - halfSize, cx - halfSize, cy, cx + halfSize, cy, 'F');
+        doc.triangle(cx, cy + halfSize, cx - halfSize, cy, cx + halfSize, cy, 'F');
+      };
+
+      // Draw official Makayasa Logo in PDF
+      
+      // 1. Hollow diamond below (Golden/Amber)
+      doc.setLineWidth(0.81);
+      doc.setDrawColor(245, 158, 11);
+      doc.line(68.42, 19.18, 70.58, 21.34);
+      doc.line(70.58, 21.34, 68.42, 23.5);
+      doc.line(68.42, 23.5, 66.26, 21.34);
+      doc.line(66.26, 21.34, 68.42, 19.18);
+
+      // 2. Solid diamond Mask (Dark Slate background color)
+      doc.setFillColor(15, 23, 42);
+      doc.triangle(68.42, 15.31, 71.03, 17.92, 65.81, 17.92, 'F');
+      doc.triangle(68.42, 20.53, 71.03, 17.92, 65.81, 17.92, 'F');
+
+      // 3. Solid diamond (Golden/Amber)
+      doc.setFillColor(245, 158, 11);
+      doc.triangle(68.42, 15.58, 70.76, 17.92, 66.08, 17.92, 'F');
+      doc.triangle(68.42, 20.26, 70.76, 17.92, 66.08, 17.92, 'F');
+
+      // 4. Stylized M (Golden/Amber)
+      doc.setFillColor(245, 158, 11);
+      // Left diagonal
+      doc.triangle(68.42, 10, 68.42, 13.24, 75.17, 19.9, 'F');
+      doc.triangle(68.42, 10, 75.17, 19.9, 75.17, 16.66, 'F');
+      // Right diagonal
+      doc.triangle(75.17, 16.66, 75.17, 19.9, 79.67, 13.24, 'F');
+      doc.triangle(75.17, 16.66, 79.67, 13.24, 79.67, 10, 'F');
+      // Right stem (rect)
+      doc.rect(79.67, 10, 2.25, 13.5, 'F');
 
       // Header Text
       doc.setTextColor(255, 255, 255);
       doc.setFont('helvetica', 'bold');
-      doc.setFontSize(16);
-      doc.text('MAKAYASA JAYA CO.', 74, 18, { align: 'center' });
+      doc.setFontSize(14);
+      doc.text('MAKAYASA', 74, 26, { align: 'center' });
 
       doc.setFont('helvetica', 'bold');
-      doc.setFontSize(9);
+      doc.setFontSize(7);
       doc.setTextColor(245, 158, 11);
-      doc.text('BUKTI TANDA TERIMA SETORAN KASIR', 74, 26, { align: 'center' });
+      doc.text('PR. MAHAPUTERA NUSANTARA', 74, 30, { align: 'center' });
+
+      doc.setFont('helvetica', 'bold');
+      doc.setFontSize(8);
+      doc.setTextColor(255, 255, 255);
+      doc.text('BUKTI TANDA TERIMA SETORAN KASIR', 74, 37, { align: 'center' });
 
       // Info Details
       doc.setTextColor(51, 65, 85);
       doc.setFont('helvetica', 'normal');
       doc.setFontSize(9);
 
-      let y = 42;
+      let y = 48;
       const drawPdfRow = (label: string, value: string, isBoldVal = false) => {
         doc.setFont('helvetica', 'normal');
         doc.setTextColor(100, 116, 139);
@@ -218,6 +261,43 @@ export default function SetoranSales({ transactions, salesNames }: SetoranSalesP
       drawPdfRow('Mulai Hari:', formatDateIndo(dep.tanggalMulaiPeriode));
       drawPdfRow('Sampai Hari:', formatDateIndo(dep.tanggalSelesaiPeriode));
       drawPdfRow('Volume Terjual:', `${dep.qtyPacksInPeriod} Packs`, true);
+
+      // Divider Line
+      doc.setDrawColor(226, 232, 240);
+      doc.setLineWidth(0.25);
+      doc.line(10, y, 138, y);
+      y += 6;
+
+      // Section: Detail Produk
+      doc.setFont('helvetica', 'bold');
+      doc.setFontSize(9);
+      doc.setTextColor(15, 23, 42);
+      doc.text('DETAIL PRODUK', 12, y);
+      y += 6;
+
+      // Table Header for Products
+      doc.setFont('helvetica', 'bold');
+      doc.setFontSize(8);
+      doc.setTextColor(100, 116, 139);
+      doc.text('Nama Produk', 12, y);
+      doc.text('Qty', 75, y, { align: 'right' });
+      doc.text('Nominal', 136, y, { align: 'right' });
+      y += 4;
+
+      doc.setDrawColor(241, 245, 249);
+      doc.line(10, y, 138, y);
+      y += 5;
+
+      // Table Row for "Makayasa Kretek 12"
+      doc.setFont('helvetica', 'normal');
+      doc.setFontSize(8);
+      doc.setTextColor(15, 23, 42);
+      doc.text('Makayasa Kretek 12', 12, y);
+      
+      doc.setFont('helvetica', 'bold');
+      doc.text(`${dep.qtyPacksInPeriod} Packs`, 75, y, { align: 'right' });
+      doc.text(formatIDR(dep.totalOmsetInPeriod), 136, y, { align: 'right' });
+      y += 7;
 
       // Divider Line
       doc.setDrawColor(226, 232, 240);
@@ -329,7 +409,7 @@ export default function SetoranSales({ transactions, salesNames }: SetoranSalesP
   const handleDownloadReceiptPNG = (dep: SalesDeposit) => {
     const canvas = document.createElement('canvas');
     canvas.width = 600;
-    canvas.height = 920;
+    canvas.height = 980;
     const ctx = canvas.getContext('2d');
     if (!ctx) return;
 
@@ -342,19 +422,80 @@ export default function SetoranSales({ transactions, salesNames }: SetoranSalesP
     ctx.lineWidth = 4;
     ctx.strokeRect(10, 10, canvas.width - 20, canvas.height - 20);
 
-    // Draw header block
+    // Draw header block (taller 135px height)
     ctx.fillStyle = '#0f172a'; // dark slate
-    ctx.fillRect(20, 20, canvas.width - 40, 100);
+    ctx.fillRect(20, 20, canvas.width - 40, 135);
 
-    // Header text
+    // Draw official Makayasa Logo in Canvas (Perfect layout and alignment)
+    // 1. Hollow diamond below
+    ctx.strokeStyle = '#f59e0b';
+    ctx.lineWidth = 4.5;
+    ctx.lineCap = 'butt';
+    ctx.lineJoin = 'miter';
+    ctx.beginPath();
+    ctx.moveTo(269, 77);
+    ctx.lineTo(281, 89);
+    ctx.lineTo(269, 101);
+    ctx.lineTo(257, 89);
+    ctx.closePath();
+    ctx.stroke();
+
+    // 2. Solid diamond Mask (Dark Slate background color)
+    ctx.fillStyle = '#0f172a';
+    ctx.beginPath();
+    ctx.moveTo(269, 55.5);
+    ctx.lineTo(283.5, 70);
+    ctx.lineTo(269, 84.5);
+    ctx.lineTo(254.5, 70);
+    ctx.closePath();
+    ctx.fill();
+
+    // 3. Solid diamond (Golden/Amber)
+    ctx.fillStyle = '#f59e0b';
+    ctx.beginPath();
+    ctx.moveTo(269, 57);
+    ctx.lineTo(282, 70);
+    ctx.lineTo(269, 83);
+    ctx.lineTo(256, 70);
+    ctx.closePath();
+    ctx.fill();
+
+    // 4. Stylized heavy 'M'
+    ctx.fillStyle = '#f59e0b';
+    // Left diagonal
+    ctx.beginPath();
+    ctx.moveTo(269, 26);
+    ctx.lineTo(269, 44);
+    ctx.lineTo(306.5, 81);
+    ctx.lineTo(306.5, 63);
+    ctx.closePath();
+    ctx.fill();
+
+    // Right diagonal
+    ctx.beginPath();
+    ctx.moveTo(306.5, 63);
+    ctx.lineTo(306.5, 81);
+    ctx.lineTo(331.5, 44);
+    ctx.lineTo(331.5, 26);
+    ctx.closePath();
+    ctx.fill();
+
+    // Right stem
+    ctx.fillRect(331.5, 26, 12.5, 75);
+
+    // Header text (offset down by 30px to fit perfectly with the new logo and taller header block)
     ctx.fillStyle = '#ffffff';
-    ctx.font = 'bold 24px monospace';
+    ctx.font = 'bold 24px sans-serif';
     ctx.textAlign = 'center';
-    ctx.fillText('MAKAYASA JAYA CO.', canvas.width / 2, 60);
+    ctx.fillText('MAKAYASA', canvas.width / 2, 116);
     
-    ctx.font = 'bold 14px sans-serif';
+    ctx.font = 'bold 11px sans-serif';
     ctx.fillStyle = '#f59e0b'; // amber
-    ctx.fillText('BUKTI TANDA TERIMA SETORAN KASIR', canvas.width / 2, 95);
+    ctx.fillText('PR. MAHAPUTERA NUSANTARA', canvas.width / 2, 130);
+
+    ctx.font = 'bold 12px sans-serif';
+    ctx.fillStyle = '#ffffff';
+    ctx.fillText('BUKTI TANDA TERIMA SETORAN KASIR', canvas.width / 2, 146);
 
     // Receipt details
     ctx.textAlign = 'left';
@@ -402,6 +543,53 @@ export default function SetoranSales({ transactions, salesNames }: SetoranSalesP
     drawRow('Volume Terjual:', `${dep.qtyPacksInPeriod} Packs`, true);
 
     // Divider line
+    ctx.setLineDash([5, 5]);
+    ctx.beginPath();
+    ctx.moveTo(30, y);
+    ctx.lineTo(canvas.width - 30, y);
+    ctx.stroke();
+    ctx.setLineDash([]);
+    y += 25;
+
+    // Section Title: DETAIL PRODUK
+    ctx.fillStyle = '#0f172a';
+    ctx.font = 'bold 12px sans-serif';
+    ctx.fillText('DETAIL PRODUK', 40, y);
+    y += 25;
+
+    // Table Header
+    ctx.fillStyle = '#64748b';
+    ctx.font = 'bold 12px monospace';
+    ctx.fillText('Nama Produk', 40, y);
+    
+    ctx.textAlign = 'right';
+    ctx.fillText('Qty', 360, y);
+    ctx.fillText('Nominal', canvas.width - 40, y);
+    ctx.textAlign = 'left';
+    y += 12;
+
+    // Table header line
+    ctx.strokeStyle = '#cbd5e1';
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.moveTo(40, y);
+    ctx.lineTo(canvas.width - 40, y);
+    ctx.stroke();
+    y += 20;
+
+    // Table Row: Makayasa Kretek 12
+    ctx.fillStyle = '#0f172a';
+    ctx.font = '13px monospace';
+    ctx.fillText('Makayasa Kretek 12', 40, y);
+
+    ctx.font = 'bold 13px monospace';
+    ctx.textAlign = 'right';
+    ctx.fillText(`${dep.qtyPacksInPeriod} Packs`, 360, y);
+    ctx.fillText(formatIDR(dep.totalOmsetInPeriod), canvas.width - 40, y);
+    ctx.textAlign = 'left';
+    y += 25;
+
+    // Divider line after product detail
     ctx.setLineDash([5, 5]);
     ctx.beginPath();
     ctx.moveTo(30, y);
@@ -1550,10 +1738,23 @@ export default function SetoranSales({ transactions, salesNames }: SetoranSalesP
                 <div className="bg-white p-3.5 xs:p-5 rounded-xl border border-slate-200 shadow-sm font-mono text-[10px] xs:text-[11px] text-slate-800 space-y-3 xs:space-y-4 overflow-hidden">
                   
                   {/* Brand logo */}
-                  <div className="text-center space-y-0.5 pb-2.5 border-b border-dashed border-slate-300">
-                    <h5 className="font-extrabold text-xs xs:text-[13px] text-slate-900 tracking-tight">MAKAYASA JAYA CO.</h5>
-                    <p className="text-[7px] xs:text-[8px] text-slate-400 uppercase tracking-wider">Bukti Tanda Terima Setoran Kasir</p>
-                    <p className="text-[7px] xs:text-[8px] text-slate-400 font-sans">Tanggal: {formatDateIndo(selectedDeposit.tanggalSetor)}</p>
+                  <div className="text-center pb-3 border-b border-dashed border-slate-300 flex flex-col items-center justify-center">
+                    <div className="w-16 h-16 text-amber-500 mb-1">
+                      <svg viewBox="0 0 100 100" className="w-full h-full" fill="none" xmlns="http://www.w3.org/2000/svg">
+                        {/* 1. Hollow diamond below */}
+                        <polygon points="25,51 37,63 25,75 13,63" stroke="#f59e0b" strokeWidth="4.5" fill="none" />
+                        
+                        {/* 2. Solid Diamond on Top with a white masking border */}
+                        <polygon points="25,31 38,44 25,57 12,44" fill="#f59e0b" stroke="#ffffff" strokeWidth="3" strokeLinejoin="miter" />
+                        
+                        {/* 3. Stylized M */}
+                        <polygon points="25,0 25,18 62.5,55 87.5,18 87.5,75 100,75 100,0 62.5,37" fill="#f59e0b" />
+                      </svg>
+                    </div>
+                    <h5 className="font-extrabold text-sm xs:text-base text-slate-900 tracking-widest uppercase">MAKAYASA</h5>
+                    <p className="text-[7.5px] xs:text-[8.5px] text-amber-600 font-extrabold uppercase tracking-wider mt-0.5">PR. MAHAPUTERA NUSANTARA</p>
+                    <p className="text-[7px] xs:text-[8px] text-slate-400 uppercase tracking-widest font-bold mt-1.5">Bukti Tanda Terima Setoran Kasir</p>
+                    <p className="text-[7px] xs:text-[8px] text-slate-400 font-sans mt-0.5">Tanggal: {formatDateIndo(selectedDeposit.tanggalSetor)}</p>
                   </div>
 
                   {/* TX ID and Sales Name */}
@@ -1586,6 +1787,21 @@ export default function SetoranSales({ transactions, salesNames }: SetoranSalesP
                     <div className="flex justify-between items-start gap-2 min-w-0 font-bold text-slate-700 mt-1 pt-1 border-t border-slate-200">
                       <span className="shrink-0">Volume:</span>
                       <span className="text-right">{selectedDeposit.qtyPacksInPeriod} Packs</span>
+                    </div>
+                  </div>
+
+                  {/* Product Details Section */}
+                  <div className="bg-slate-50 p-2 xs:p-2.5 rounded border border-slate-200/60 text-[9px] xs:text-[10px] min-w-0 space-y-1.5">
+                    <div className="font-bold text-[7px] xs:text-[8px] text-slate-400 uppercase tracking-wider mb-0.5">DETAIL PRODUK:</div>
+                    <div className="grid grid-cols-12 gap-1 font-bold text-slate-500 border-b border-slate-200 pb-1 text-[8px] xs:text-[9px]">
+                      <div className="col-span-6">Nama Produk</div>
+                      <div className="col-span-2 text-right">Qty</div>
+                      <div className="col-span-4 text-right">Nominal</div>
+                    </div>
+                    <div className="grid grid-cols-12 gap-1 text-slate-800 pt-0.5 font-sans">
+                      <div className="col-span-6 font-medium text-slate-950">Makayasa Kretek 12</div>
+                      <div className="col-span-2 text-right font-bold">{selectedDeposit.qtyPacksInPeriod} Pk</div>
+                      <div className="col-span-4 text-right font-bold text-slate-900">{formatIDR(selectedDeposit.totalOmsetInPeriod)}</div>
                     </div>
                   </div>
 

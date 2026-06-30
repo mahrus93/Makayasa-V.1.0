@@ -122,37 +122,39 @@ export default function StokGudang({ transactions, salesNames }: StokGudangProps
           tanggal: new Date(entry.tanggal)
         }));
 
-        // Filter out any sales transactions that were auto-generated into stock entries (e.g., STK-OUT-2000 or keterangan contains "Ambil barang sales")
+        // Filter out any mock/seeded stock data completely
         const filtered = hydrated.filter(entry => {
-          const isAutoSalesOutflow = 
-            (entry.id && (entry.id.startsWith('STK-OUT-2000') || entry.id.startsWith('STK-OUT-2'))) || 
-            (entry.keterangan && entry.keterangan.includes('Ambil barang sales'));
-          return !isAutoSalesOutflow;
+          const id = entry.id || '';
+          const isMock = 
+            id.startsWith('STK-IN-100') || 
+            id.startsWith('STK-OUT-MISC-300') || 
+            id.startsWith('STK-OUT-200') ||
+            id.startsWith('STK-OUT-MISC-3000') ||
+            id.startsWith('STK-OUT-MISC-3001') ||
+            (entry.sumberTujuan === 'Pabrik Makayasa' && (entry.jumlah === 3000 || entry.jumlah === 2500 || entry.jumlah === 2000)) ||
+            (entry.keterangan && (
+              entry.keterangan.includes('Pengiriman kontainer pertama') ||
+              entry.keterangan.includes('Restock mingguan reguler') ||
+              entry.keterangan.includes('Penerimaan stok tambahan') ||
+              entry.keterangan.includes('Restock akhir bulan') ||
+              entry.keterangan.includes('Sempel promosi event car free day') ||
+              entry.keterangan.includes('Pemusnahan rokok penyok') ||
+              entry.keterangan.includes('Ambil barang sales')
+            ));
+          return !isMock;
         });
 
-        // Convert any mock initial factory seed entries (STK-IN-1000...) to 'Aplikasi' source so user knows they are local seed data
-        const migrated = filtered.map(entry => {
-          if (
-            (entry.id && entry.id.startsWith('STK-IN-100')) ||
-            (entry.sumberTujuan === 'Pabrik Makayasa' && entry.sumberInput === 'Spreadsheet')
-          ) {
-            return {
-              ...entry,
-              sumberInput: 'Aplikasi' as const
-            };
-          }
-          return entry;
-        });
-
-        // Write back if migrated changes were made
-        if (JSON.stringify(migrated) !== JSON.stringify(parsed)) {
-          localStorage.setItem(STORAGE_STOCK_KEY, JSON.stringify(migrated));
+        // Write back if changes were made
+        if (JSON.stringify(filtered) !== JSON.stringify(parsed)) {
+          localStorage.setItem(STORAGE_STOCK_KEY, JSON.stringify(filtered));
         }
 
-        setStockEntries(migrated);
+        setStockEntries(filtered);
       } catch (e) {
         console.error('Failed to load stock entries:', e);
       }
+    } else {
+      setStockEntries([]);
     }
   };
 
@@ -192,64 +194,10 @@ export default function StokGudang({ transactions, salesNames }: StokGudangProps
     };
   }, []);
 
-  // Seed realistic stock history that acts as application-level default initial data
+  // Seed realistic stock history that acts as application-level default initial data (empty by default)
   const seedDefaultStock = () => {
-    const generated: StockEntry[] = [];
-    const baseDate = new Date();
-
-    // 1. Large factory inflows (Stock Masuk) - marked as 'Aplikasi' so the user knows they are local default seed data
-    const factoryInflows = [
-      { daysOffset: 25, qty: 3000, desc: 'Pengiriman kontainer pertama dari pabrik' },
-      { daysOffset: 18, qty: 2500, desc: 'Restock mingguan reguler pabrik' },
-      { daysOffset: 11, qty: 3000, desc: 'Penerimaan stok tambahan tipe filter' },
-      { daysOffset: 4, qty: 2000, desc: 'Restock akhir bulan pabrik' },
-    ];
-
-    factoryInflows.forEach((inflow, i) => {
-      const d = new Date(baseDate);
-      d.setDate(baseDate.getDate() - inflow.daysOffset);
-      generated.push({
-        id: `STK-IN-${1000 + i}`,
-        tanggal: d,
-        tipe: 'Masuk',
-        sumberTujuan: 'Pabrik Makayasa',
-        jumlah: inflow.qty,
-        keterangan: inflow.desc,
-        sumberInput: 'Aplikasi'
-      });
-    });
-
-    // Note: Sales/Penjualan transactions are strictly excluded from the warehouse stock circulation archive
-    // to keep the warehouse records focused solely on actual direct warehouse stock in/out operations.
-
-    // 2. Some other promotional/sample outflows
-    const otherOutflows = [
-      { daysOffset: 15, qty: 50, dest: 'Tim Promosi', desc: 'Sempel promosi event car free day' },
-      { daysOffset: 8, qty: 30, dest: 'Retur Rusak', desc: 'Pemusnahan rokok penyok / cacat segel' },
-    ];
-
-    otherOutflows.forEach((outflow, i) => {
-      const d = new Date(baseDate);
-      d.setDate(baseDate.getDate() - outflow.daysOffset);
-      generated.push({
-        id: `STK-OUT-MISC-${3000 + i}`,
-        tanggal: d,
-        tipe: 'Keluar',
-        sumberTujuan: outflow.dest,
-        jumlah: outflow.qty,
-        keterangan: outflow.desc,
-        sumberInput: 'Aplikasi'
-      });
-    });
-
-    // Sort descending by date
-    const sorted = generated.sort((a, b) => {
-      const dateA = a.tanggal instanceof Date ? a.tanggal : new Date(a.tanggal);
-      const dateB = b.tanggal instanceof Date ? b.tanggal : new Date(b.tanggal);
-      return dateB.getTime() - dateA.getTime();
-    });
-    setStockEntries(sorted);
-    localStorage.setItem(STORAGE_STOCK_KEY, JSON.stringify(sorted));
+    setStockEntries([]);
+    localStorage.setItem(STORAGE_STOCK_KEY, JSON.stringify([]));
   };
 
   // Helper to save stock entries and sync with local storage

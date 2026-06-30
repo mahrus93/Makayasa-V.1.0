@@ -54,19 +54,44 @@ export default function App() {
   const [sidebarCollapsed, setSidebarCollapsed] = useState<boolean>(false);
 
   // App configurations state
-  const [config, setConfig] = useState<AppConfig>({
-    spreadsheetUrl: 'https://docs.google.com/spreadsheets/d/1ZS6Zk0vPlMER19uRdPLZHiXReZNnJsMwdaZhFZdCeus/edit',
-    appScriptUrl: '',
-    pricePerPack: 6000,
-    mode: 'demo', // Defaults to demo to show data immediately
-    brandName: 'MAKAYASA JEMBER',
-    brandSubtitle: 'KOMANDAN',
-    brandLogoInitials: 'MY',
-    ownerName: 'Komandan Makayasa',
-    ownerRole: 'Komandan Perusahaan',
-    ownerInitials: 'KM',
-    loginUsername: 'komandan',
-    loginPassword: 'makayasajaya',
+  const [config, setConfig] = useState<AppConfig>(() => {
+    const savedConfig = localStorage.getItem(STORAGE_CONFIG_KEY);
+    if (savedConfig) {
+      try {
+        const parsed = JSON.parse(savedConfig);
+        return {
+          spreadsheetUrl: 'https://docs.google.com/spreadsheets/d/1ZS6Zk0vPlMER19uRdPLZHiXReZNnJsMwdaZhFZdCeus/edit',
+          appScriptUrl: '',
+          pricePerPack: 6000,
+          mode: 'live', // Default to live to avoid placeholder data
+          brandName: 'MAKAYASA JEMBER',
+          brandSubtitle: 'KOMANDAN',
+          brandLogoInitials: 'MY',
+          ownerName: 'Komandan Makayasa',
+          ownerRole: 'Komandan Perusahaan',
+          ownerInitials: 'KM',
+          loginUsername: 'komandan',
+          loginPassword: 'makayasajaya',
+          ...parsed
+        };
+      } catch (e) {
+        console.error('Gagal memuat konfigurasi dari local storage:', e);
+      }
+    }
+    return {
+      spreadsheetUrl: 'https://docs.google.com/spreadsheets/d/1ZS6Zk0vPlMER19uRdPLZHiXReZNnJsMwdaZhFZdCeus/edit',
+      appScriptUrl: '',
+      pricePerPack: 6000,
+      mode: 'live', // Default to live to avoid placeholder data
+      brandName: 'MAKAYASA JEMBER',
+      brandSubtitle: 'KOMANDAN',
+      brandLogoInitials: 'MY',
+      ownerName: 'Komandan Makayasa',
+      ownerRole: 'Komandan Perusahaan',
+      ownerInitials: 'KM',
+      loginUsername: 'komandan',
+      loginPassword: 'makayasajaya',
+    };
   });
 
   // Filter configuration
@@ -337,7 +362,7 @@ export default function App() {
       spreadsheetUrl: 'https://docs.google.com/spreadsheets/d/1ZS6Zk0vPlMER19uRdPLZHiXReZNnJsMwdaZhFZdCeus/edit',
       appScriptUrl: '',
       pricePerPack: 6000,
-      mode: 'demo',
+      mode: 'live',
       brandName: 'MAKAYASA JEMBER',
       brandSubtitle: 'KOMANDAN',
       brandLogoInitials: 'MY',
@@ -369,6 +394,19 @@ export default function App() {
 
     // Live mode spreadsheet/appscript parsing
     try {
+      const fetchWithTimeout = async (url: string, timeout = 60000) => {
+        const controller = new AbortController();
+        const id = setTimeout(() => controller.abort(), timeout);
+        try {
+          const response = await fetch(url, { signal: controller.signal });
+          clearTimeout(id);
+          return response;
+        } catch (err) {
+          clearTimeout(id);
+          throw err;
+        }
+      };
+
       let parsedData: Transaction[] = [];
       let isAppScriptSync = false;
 
@@ -392,15 +430,19 @@ export default function App() {
           let response;
           try {
             const proxyUrl = `/api/proxy-appscript?url=${encodeURIComponent(targetUrl)}`;
-            response = await fetch(proxyUrl);
+            response = await fetchWithTimeout(proxyUrl, 60000);
             if (!response.ok && response.status === 404) {
               // Fallback to direct browser fetch if the proxy endpoint returns 404 (e.g. on Vercel static)
               console.log("[SYNC] Proxy API returned 404 (running on Vercel or static host). Fetching Google Apps Script directly from browser...");
-              response = await fetch(targetUrl);
+              response = await fetchWithTimeout(targetUrl, 60000);
             }
           } catch (proxyFetchErr) {
-            console.log("[SYNC] Proxy fetch failed. Fetching Google Apps Script directly from browser...", proxyFetchErr);
-            response = await fetch(targetUrl);
+            console.log("[SYNC] Proxy fetch failed or timed out. Fetching Google Apps Script directly from browser...", proxyFetchErr);
+            try {
+              response = await fetchWithTimeout(targetUrl, 60000);
+            } catch (directErr) {
+              console.warn("[SYNC] Direct fetch also failed or timed out:", directErr);
+            }
           }
 
           if (response && response.ok) {
@@ -498,14 +540,18 @@ export default function App() {
         let response;
         try {
           const proxyUrl = `/api/proxy-appscript?url=${encodeURIComponent(csvUrl)}`;
-          response = await fetch(proxyUrl);
+          response = await fetchWithTimeout(proxyUrl, 60000);
           if (!response.ok && response.status === 404) {
             console.log("[SYNC] Proxy API returned 404 for CSV. Fetching spreadsheet CSV directly...");
-            response = await fetch(csvUrl);
+            response = await fetchWithTimeout(csvUrl, 60000);
           }
         } catch (csvFetchErr) {
-          console.log("[SYNC] Proxy fetch for CSV failed. Fetching directly...", csvFetchErr);
-          response = await fetch(csvUrl);
+          console.log("[SYNC] Proxy fetch for CSV failed or timed out. Fetching directly...", csvFetchErr);
+          try {
+            response = await fetchWithTimeout(csvUrl, 60000);
+          } catch (directCsvErr) {
+            console.warn("[SYNC] Direct CSV fetch also failed or timed out:", directCsvErr);
+          }
         }
 
         if (!response || !response.ok) {
@@ -516,7 +562,7 @@ export default function App() {
         parsedData = parseCSVToTransactions(csvText, activeConfig.pricePerPack);
       }
 
-      if (parsedData.length === 0) {
+      if (parsedData.length === 0 && activeConfig.mode === 'demo') {
         throw new Error('Spreadsheet kosong atau penamaan header kolom tidak cocok. Memakai data simulasi sebagai cadangan.');
       }
 
@@ -535,17 +581,18 @@ export default function App() {
       if (!isSilent) setLoading(false);
     } catch (error: any) {
       console.warn('Kesalahan Sinkronisasi:', error);
-      if (rawTransactions.length === 0) {
+      if (activeConfig.mode === 'demo' && rawTransactions.length === 0) {
         // Fallback seamlessly to mock data so the app remains perfectly functional
         const fallbackData = generateMockTransactions(activeConfig.pricePerPack);
         setRawTransactions(fallbackData);
+      } else if (activeConfig.mode === 'live') {
+        // Keep transactions empty as requested by the user, do not fallback to mock data
+        setRawTransactions([]);
+        setBannerMessage(
+          `Gagal sinkronisasi data real-time: ${error.message || 'Koneksi terputus'}. Menampilkan data kosong.`
+        );
       }
       if (!isSilent) setLoading(false);
-      
-      // Show warning banner to let owner know we are running on fallback
-      setBannerMessage(
-        `Koneksi gagal atau spreadsheet private. Mengaktifkan data simulasi cadangan secara otomatis agar dashboard tetap menyala. (${error.message || 'CORS Restriction'})`
-      );
     }
   }, [config, soundEnabled, playNotificationChime, triggerBrowserNotification, rawTransactions.length]);
 
@@ -609,17 +656,34 @@ export default function App() {
     }
 
     try {
+      const testFetchWithTimeout = async (url: string, timeout = 60000) => {
+        const controller = new AbortController();
+        const id = setTimeout(() => controller.abort(), timeout);
+        try {
+          const response = await fetch(url, { signal: controller.signal });
+          clearTimeout(id);
+          return response;
+        } catch (err) {
+          clearTimeout(id);
+          throw err;
+        }
+      };
+
       let res;
       try {
         const proxyUrl = `/api/proxy-appscript?url=${encodeURIComponent(cleanedUrl)}`;
-        res = await fetch(proxyUrl);
+        res = await testFetchWithTimeout(proxyUrl, 60000);
         if (!res.ok && res.status === 404) {
           console.log("[TEST] Proxy API returned 404 (running on Vercel). Fetching Apps Script directly from browser...");
-          res = await fetch(cleanedUrl);
+          res = await testFetchWithTimeout(cleanedUrl, 60000);
         }
       } catch (proxyErr) {
-        console.log("[TEST] Proxy fetch failed. Fetching Apps Script directly from browser...", proxyErr);
-        res = await fetch(cleanedUrl);
+        console.log("[TEST] Proxy fetch failed or timed out. Fetching Apps Script directly from browser...", proxyErr);
+        try {
+          res = await testFetchWithTimeout(cleanedUrl, 60000);
+        } catch (directErr) {
+          console.warn("[TEST] Direct connection test fetch failed or timed out:", directErr);
+        }
       }
 
       if (!res) {

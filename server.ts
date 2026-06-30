@@ -47,14 +47,26 @@ async function startServer() {
 
       console.log(`[PROXY] Fetching from Google Service: ${url}`);
       
-      const response = await fetch(url, {
-        method: "GET",
-        headers: {
-          "Accept": "application/json, text/plain, */*",
-          "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
-        },
-        redirect: "follow" // Ensure redirect (302 Found) to googleusercontent is followed
-      });
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => {
+        controller.abort();
+        console.log(`[PROXY] Fetch timeout exceeded for: ${url}`);
+      }, 60000); // 60 seconds timeout limit for proxies
+
+      let response;
+      try {
+        response = await fetch(url, {
+          method: "GET",
+          headers: {
+            "Accept": "application/json, text/plain, */*",
+            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+          },
+          redirect: "follow", // Ensure redirect (302 Found) to googleusercontent is followed
+          signal: controller.signal
+        });
+      } finally {
+        clearTimeout(timeoutId);
+      }
 
       if (!response.ok) {
         return res.status(response.status).json({ 
@@ -96,6 +108,11 @@ async function startServer() {
       }
     } catch (error: any) {
       console.error("[PROXY ERROR] Failed to fetch Google resource:", error);
+      if (error.name === "AbortError" || error.message?.includes("aborted") || error.message?.includes("timeout")) {
+        return res.status(504).json({ 
+          error: "Koneksi ke Google Apps Script/Spreadsheet mengalami Timeout (melebihi 60 detik). Ini biasanya terjadi karena Google Sheets sedang memproses data yang terlalu besar atau Apps Script mengalami cold start. Silakan coba sinkronisasi ulang dalam beberapa saat." 
+        });
+      }
       return res.status(500).json({ 
         error: error.message || "Unknown proxy error occurred while fetching from Google Services." 
       });
