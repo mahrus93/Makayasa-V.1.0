@@ -56,11 +56,18 @@ async function startServer() {
         return res.json(jsonData);
       } else {
         const textData = await response.text();
-        
-        // Check if the response is actually an HTML page (e.g., Google Login screen or Apps Script Editor)
-        if (textData.trim().startsWith("<!DOCTYPE") || textData.trim().startsWith("<html") || textData.trim().startsWith("<script")) {
+        const trimmed = textData.trim();
+        const isHtml = contentType.toLowerCase().includes("text/html") || 
+                       trimmed.toLowerCase().startsWith("<!doctype") || 
+                       trimmed.toLowerCase().startsWith("<html") || 
+                       trimmed.toLowerCase().startsWith("<script") ||
+                       trimmed.includes("<body") ||
+                       trimmed.includes("google-signin") ||
+                       trimmed.includes("Sign in");
+
+        if (isHtml) {
           return res.status(400).json({
-            error: "Web App mengembalikan halaman HTML (Google Login/Editor), bukan data JSON. Pastikan pengaturan Akses diatur ke 'Anyone' (Siapa saja) dan Anda menyalin tautan Web App (/exec) dari menu 'Deploy', bukan tautan Editor!"
+            error: "Web App mengembalikan halaman HTML (Google Login/Editor), bukan data JSON. Pastikan Anda mendeploy Apps Script sebagai Web App dengan pengaturan:\n1. Klik 'Terapkan' (Deploy) > 'Penerapan baru' (New deployment)\n2. Pilih tipe: 'Web App'\n3. Jalankan sebagai (Execute as): 'Saya (Me / mahrus0593@gmail.com)'\n4. Siapa yang memiliki akses (Who has access): 'Siapa saja (Anyone)'\n5. Salin URL Web App yang berakhiran '/exec', bukan link editor Apps Script atau Spreadsheet!"
           });
         }
 

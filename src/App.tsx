@@ -554,7 +554,13 @@ export default function App() {
         } catch (_) {}
         throw new Error(errMsg);
       }
-      const json = await res.json();
+      
+      let json;
+      try {
+        json = await res.json();
+      } catch (jsonErr) {
+        throw new Error("Web App mengembalikan data non-JSON (Format Tidak Valid). Pastikan Anda telah men-deploy ulang Apps Script sebagai Web App baru, dan akses diatur ke 'Anyone' (Siapa saja) serta 'Execute as: Me'.");
+      }
       
       if (json.status === 'success' && Array.isArray(json.data)) {
         setTestStatus('success');
