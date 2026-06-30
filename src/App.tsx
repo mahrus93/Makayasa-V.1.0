@@ -375,7 +375,21 @@ export default function App() {
       // Prioritize live JSON API from Google Apps Script if configured
       if (activeConfig.appScriptUrl) {
         try {
-          const proxyUrl = `/api/proxy-appscript?url=${encodeURIComponent(activeConfig.appScriptUrl)}`;
+          let targetUrl = activeConfig.appScriptUrl.trim();
+          
+          // Auto-fix: if the user forgot '/exec' at the end of the Google Apps Script URL, append it automatically
+          if (targetUrl.includes("script.google.com/macros/s/")) {
+            const parts = targetUrl.split("script.google.com/macros/s/");
+            if (parts.length === 2) {
+              const idSegment = parts[1];
+              if (!idSegment.includes("/exec")) {
+                const idClean = idSegment.split("?")[0].split("/")[0].trim();
+                targetUrl = `https://script.google.com/macros/s/${idClean}/exec`;
+              }
+            }
+          }
+
+          const proxyUrl = `/api/proxy-appscript?url=${encodeURIComponent(targetUrl)}`;
           const response = await fetch(proxyUrl);
           if (response.ok) {
             const json = await response.json();
@@ -543,8 +557,22 @@ export default function App() {
     setTestStatus('testing');
     setTestMessage('Mencoba menyambungkan ke Google Apps Script Web App...');
 
+    let cleanedUrl = url.trim();
+    
+    // Auto-fix: if the user forgot '/exec' at the end of the Google Apps Script URL, append it automatically
+    if (cleanedUrl.includes("script.google.com/macros/s/")) {
+      const parts = cleanedUrl.split("script.google.com/macros/s/");
+      if (parts.length === 2) {
+        const idSegment = parts[1];
+        if (!idSegment.includes("/exec")) {
+          const idClean = idSegment.split("?")[0].split("/")[0].trim();
+          cleanedUrl = `https://script.google.com/macros/s/${idClean}/exec`;
+        }
+      }
+    }
+
     try {
-      const proxyUrl = `/api/proxy-appscript?url=${encodeURIComponent(url)}`;
+      const proxyUrl = `/api/proxy-appscript?url=${encodeURIComponent(cleanedUrl)}`;
       const res = await fetch(proxyUrl);
       if (!res.ok) {
         let errMsg = `HTTP Error: ${res.status}`;
@@ -566,13 +594,19 @@ export default function App() {
         setTestStatus('success');
         setTestMessage(`Koneksi Sukses! Terbaca ${json.total_records || json.data.length} baris data dari Google Sheets secara real-time.`);
         
-        // Save the appscript URL in our configurations
+        // Save the cleaned appscript URL in our configurations
         const updated = {
           ...config,
-          appScriptUrl: url,
+          appScriptUrl: cleanedUrl,
           mode: 'live' as const
         };
         handleUpdateConfig(updated);
+        
+        // Force the input element in UI to also display the corrected working URL
+        const inputEl = document.getElementById('appscript_url_input') as HTMLInputElement | null;
+        if (inputEl) {
+          inputEl.value = cleanedUrl;
+        }
         
         // Override state with Apps Script JSON response
         const formattedData = json.data.map((row: any, i: number) => {

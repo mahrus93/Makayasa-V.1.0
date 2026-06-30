@@ -17,9 +17,22 @@ async function startServer() {
   // Secure Server-side Proxy for Google Sheets CSV and Apps Script Web Apps
   // Bypasses CORS and Iframe Redirection constraints in the browser sandbox.
   app.get("/api/proxy-appscript", async (req, res) => {
-    const url = req.query.url as string;
+    let url = (req.query.url as string || "").trim();
     if (!url) {
       return res.status(400).json({ error: "Missing 'url' query parameter" });
+    }
+
+    // Auto-fix: if the user forgot '/exec' at the end of the Google Apps Script URL, append it automatically
+    if (url.includes("script.google.com/macros/s/")) {
+      const parts = url.split("script.google.com/macros/s/");
+      if (parts.length === 2) {
+        const idSegment = parts[1];
+        if (!idSegment.includes("/exec")) {
+          const idClean = idSegment.split("?")[0].split("/")[0].trim();
+          url = `https://script.google.com/macros/s/${idClean}/exec`;
+          console.log(`[PROXY] Auto-corrected Apps Script URL: ${url}`);
+        }
+      }
     }
 
     try {
