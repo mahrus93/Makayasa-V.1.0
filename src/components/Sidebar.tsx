@@ -155,27 +155,46 @@ export default function Sidebar({
                 key={item.id}
                 id={`sidebar_menu_${item.id}`}
                 onClick={() => handleMenuClick(item.id)}
-                className={`w-full flex items-center rounded-xl transition-all text-left relative group py-2.5 px-3 min-h-[44px] ${
+                className={`w-full flex items-center rounded-xl transition-all duration-200 text-left relative group py-2.5 px-3 min-h-[44px] hover:scale-[1.015] active:scale-[0.985] ${
                   isActive 
-                    ? 'bg-amber-500 text-slate-950 font-bold shadow-lg shadow-amber-500/10' 
-                    : 'hover:bg-slate-850 hover:text-white text-slate-400'
+                    ? 'bg-amber-500 text-slate-950 font-bold shadow-lg shadow-amber-500/15' 
+                    : 'hover:bg-slate-800/60 hover:text-white text-slate-400'
                 } ${isCollapsed ? 'lg:justify-center' : 'gap-3'}`}
                 title={item.name}
               >
-                <div className={`p-1.5 rounded-lg shrink-0 ${isActive ? 'bg-slate-900/10 text-slate-950' : 'bg-slate-800 text-slate-300 group-hover:text-white'}`}>
-                  <IconComponent className="w-4.5 h-4.5" />
+                {/* Subtle Amber indicator on hover */}
+                {!isActive && (
+                  <div className="absolute left-0 top-1/2 -translate-y-1/2 w-1 h-5 rounded-r-full bg-amber-500 scale-y-0 group-hover:scale-y-100 opacity-0 group-hover:opacity-100 transition-all duration-200" />
+                )}
+
+                <div className={`p-1.5 rounded-lg shrink-0 transition-all duration-200 ${
+                  isActive 
+                    ? 'bg-slate-900/15 text-slate-950' 
+                    : 'bg-slate-800 text-slate-300 group-hover:bg-slate-700/80 group-hover:text-white group-hover:scale-105'
+                }`}>
+                  <IconComponent className="w-4.5 h-4.5 transition-transform duration-200 group-hover:rotate-3" />
                 </div>
                 
                 <div className={`flex-1 min-w-0 transition-opacity duration-200 ${isCollapsed ? 'lg:hidden' : 'block'}`}>
-                  <p className={`text-xs truncate ${isActive ? 'text-slate-950 font-bold' : 'text-slate-200'}`}>
+                  <p className={`text-xs truncate transition-all duration-200 group-hover:translate-x-0.5 ${
+                    isActive ? 'text-slate-950 font-black' : 'text-slate-200 group-hover:text-white group-hover:font-medium'
+                  }`}>
                     {item.name}
                   </p>
-                  <p className={`text-[10px] truncate ${isActive ? 'text-slate-800 font-medium' : 'text-slate-500'}`}>
+                  <p className={`text-[10px] truncate transition-all duration-200 ${
+                    isActive ? 'text-slate-800 font-semibold' : 'text-slate-500 group-hover:text-slate-400'
+                  }`}>
                     {item.desc}
                   </p>
                 </div>
                 
-                <ChevronRight className={`w-3.5 h-3.5 shrink-0 transition-transform ${isCollapsed ? 'lg:hidden' : 'block'} ${isActive ? 'text-slate-950 scale-110' : 'text-slate-600 group-hover:translate-x-0.5'}`} />
+                <ChevronRight className={`w-3.5 h-3.5 shrink-0 transition-all duration-200 ${
+                  isCollapsed ? 'lg:hidden' : 'block'
+                } ${
+                  isActive 
+                    ? 'text-slate-950 scale-110' 
+                    : 'text-slate-600 group-hover:text-white group-hover:translate-x-0.5'
+                }`} />
               </button>
             );
           })}

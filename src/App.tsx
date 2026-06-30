@@ -111,6 +111,38 @@ export default function App() {
   // Error/Alert banner states
   const [bannerMessage, setBannerMessage] = useState<string | null>(null);
 
+  // --- DARK/LIGHT THEME STATES ---
+  const [theme, setTheme] = useState<'light' | 'dark'>(() => {
+    if (typeof window !== 'undefined') {
+      const savedTheme = localStorage.getItem('theme');
+      if (savedTheme === 'dark' || savedTheme === 'light') {
+        return savedTheme;
+      }
+      if (window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches) {
+        return 'dark';
+      }
+    }
+    return 'light';
+  });
+
+  // Apply theme class to HTML/Body elements
+  useEffect(() => {
+    const root = document.documentElement;
+    const body = document.body;
+    if (theme === 'dark') {
+      root.classList.add('dark');
+      body.classList.add('dark');
+    } else {
+      root.classList.remove('dark');
+      body.classList.remove('dark');
+    }
+    localStorage.setItem('theme', theme);
+  }, [theme]);
+
+  const toggleTheme = () => {
+    setTheme(prev => prev === 'light' ? 'dark' : 'light');
+  };
+
   // --- REAL-TIME NOTIFICATION SIMULATOR STATES ---
   const [soundEnabled, setSoundEnabled] = useState<boolean>(false);
   const [autoSimulate, setAutoSimulate] = useState<boolean>(false);
@@ -917,7 +949,7 @@ export default function App() {
   }
 
   return (
-    <div className="min-h-screen bg-slate-50 flex text-slate-800">
+    <div className="min-h-screen bg-slate-50 dark:bg-slate-950 flex text-slate-800 dark:text-slate-100 theme-transition">
       
       {/* 9-Menu Sidebar Navigation Panel */}
       <Sidebar 
@@ -943,6 +975,8 @@ export default function App() {
           onRefresh={() => syncSpreadsheetData()}
           loading={loading}
           onToggleSidebarMobile={() => setSidebarOpen(!sidebarOpen)}
+          theme={theme}
+          onToggleTheme={toggleTheme}
         />
 
         {/* Content View wrapper */}
