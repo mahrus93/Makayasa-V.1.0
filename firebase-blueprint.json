@@ -1,0 +1,102 @@
+{
+  "entities": {
+    "sales_deposits": {
+      "title": "Setoran Sales",
+      "description": "Data setoran harian dari masing-masing sales",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "tanggal": { "type": "string", "format": "date" },
+        "salesName": { "type": "string" },
+        "jumlahSetoran": { "type": "number" },
+        "jumlahPacks": { "type": "number" },
+        "keterangan": { "type": "string" },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["id", "tanggal", "salesName", "jumlahSetoran", "jumlahPacks"]
+    },
+    "expenses": {
+      "title": "Beban Operasional",
+      "description": "Data pengeluaran atau beban operasional",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "tanggal": { "type": "string", "format": "date" },
+        "kategori": { "type": "string" },
+        "jumlah": { "type": "number" },
+        "keterangan": { "type": "string" },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["id", "tanggal", "kategori", "jumlah"]
+    },
+    "freelance_records": {
+      "title": "Kinerja Freelance",
+      "description": "Data presensi dan aktivitas harian tim freelance",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "tanggal": { "type": "string", "format": "date" },
+        "nama": { "type": "string" },
+        "kehadiran": { "type": "string" },
+        "keterangan": { "type": "string" },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["id", "tanggal", "nama", "kehadiran"]
+    },
+    "stok_gudang": {
+      "title": "Stok Gudang dan Sales",
+      "description": "Catatan transaksi keluar masuk stok di gudang utama maupun sales",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "tanggal": { "type": "string", "format": "date" },
+        "namaBarang": { "type": "string" },
+        "salesName": { "type": "string" },
+        "stokAwal": { "type": "number" },
+        "stokMasuk": { "type": "number" },
+        "stokKeluar": { "type": "number" },
+        "stokAkhir": { "type": "number" },
+        "keterangan": { "type": "string" },
+        "type": { "type": "string", "enum": ["gudang", "sales"] },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["id", "tanggal", "namaBarang", "stokAwal", "stokMasuk", "stokKeluar", "stokAkhir", "type"]
+    },
+    "owner_config": {
+      "title": "Pengaturan Owner",
+      "description": "Konfigurasi global sistem yang disinkronkan",
+      "type": "object",
+      "properties": {
+        "pricePerPack": { "type": "number" },
+        "targetMingguan": { "type": "number" },
+        "loginPassword": { "type": "string" },
+        "spreadsheetUrl": { "type": "string" },
+        "appScriptUrl": { "type": "string" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["pricePerPack", "targetMingguan", "loginPassword"]
+    }
+  },
+  "firestore": {
+    "sales_deposits": {
+      "schema": "sales_deposits",
+      "description": "Koleksi setoran sales"
+    },
+    "expenses": {
+      "schema": "expenses",
+      "description": "Koleksi beban operasional"
+    },
+    "freelance_records": {
+      "schema": "freelance_records",
+      "description": "Koleksi kehadiran freelance"
+    },
+    "stok_gudang": {
+      "schema": "stok_gudang",
+      "description": "Koleksi pencatatan stok barang"
+    },
+    "owner_config": {
+      "schema": "owner_config",
+      "description": "Koleksi setelan konfigurasi sistem"
+    }
+  }
+}
