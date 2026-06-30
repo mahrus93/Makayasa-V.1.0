@@ -121,7 +121,35 @@ export default function StokGudang({ transactions, salesNames }: StokGudangProps
           ...entry,
           tanggal: new Date(entry.tanggal)
         }));
-        setStockEntries(hydrated);
+
+        // Filter out any sales transactions that were auto-generated into stock entries (e.g., STK-OUT-2000 or keterangan contains "Ambil barang sales")
+        const filtered = hydrated.filter(entry => {
+          const isAutoSalesOutflow = 
+            (entry.id && (entry.id.startsWith('STK-OUT-2000') || entry.id.startsWith('STK-OUT-2'))) || 
+            (entry.keterangan && entry.keterangan.includes('Ambil barang sales'));
+          return !isAutoSalesOutflow;
+        });
+
+        // Convert any mock initial factory seed entries (STK-IN-1000...) to 'Aplikasi' source so user knows they are local seed data
+        const migrated = filtered.map(entry => {
+          if (
+            (entry.id && entry.id.startsWith('STK-IN-100')) ||
+            (entry.sumberTujuan === 'Pabrik Makayasa' && entry.sumberInput === 'Spreadsheet')
+          ) {
+            return {
+              ...entry,
+              sumberInput: 'Aplikasi' as const
+            };
+          }
+          return entry;
+        });
+
+        // Write back if migrated changes were made
+        if (JSON.stringify(migrated) !== JSON.stringify(parsed)) {
+          localStorage.setItem(STORAGE_STOCK_KEY, JSON.stringify(migrated));
+        }
+
+        setStockEntries(migrated);
       } catch (e) {
         console.error('Failed to load stock entries:', e);
       }
@@ -164,12 +192,12 @@ export default function StokGudang({ transactions, salesNames }: StokGudangProps
     };
   }, []);
 
-  // Seed realistic stock history that correlates with active transactions
+  // Seed realistic stock history that acts as application-level default initial data
   const seedDefaultStock = () => {
     const generated: StockEntry[] = [];
     const baseDate = new Date();
 
-    // 1. Large factory inflows (Stock Masuk)
+    // 1. Large factory inflows (Stock Masuk) - marked as 'Aplikasi' so the user knows they are local default seed data
     const factoryInflows = [
       { daysOffset: 25, qty: 3000, desc: 'Pengiriman kontainer pertama dari pabrik' },
       { daysOffset: 18, qty: 2500, desc: 'Restock mingguan reguler pabrik' },
@@ -187,44 +215,14 @@ export default function StokGudang({ transactions, salesNames }: StokGudangProps
         sumberTujuan: 'Pabrik Makayasa',
         jumlah: inflow.qty,
         keterangan: inflow.desc,
-        sumberInput: 'Spreadsheet'
+        sumberInput: 'Aplikasi'
       });
     });
 
-    // 2. Correlated outflows to sales
-    // We group transactions by date & sales to create consolidated stock outgoing logs
-    const salesDateGroups: Record<string, Record<string, number>> = {};
-    
-    transactions.forEach(tx => {
-      if (tx.qtyPacks <= 0) return;
-      const txDate = tx.tanggal instanceof Date ? tx.tanggal : new Date(tx.tanggal);
-      if (isNaN(txDate.getTime())) return;
-      const dateStr = txDate.toISOString().substring(0, 10);
-      const sales = tx.salesName || 'Sales';
-      
-      if (!salesDateGroups[dateStr]) {
-        salesDateGroups[dateStr] = {};
-      }
-      salesDateGroups[dateStr][sales] = (salesDateGroups[dateStr][sales] || 0) + tx.qtyPacks;
-    });
+    // Note: Sales/Penjualan transactions are strictly excluded from the warehouse stock circulation archive
+    // to keep the warehouse records focused solely on actual direct warehouse stock in/out operations.
 
-    let index = 0;
-    Object.entries(salesDateGroups).forEach(([dateStr, salesQtys]) => {
-      Object.entries(salesQtys).forEach(([salesName, totalQty]) => {
-        generated.push({
-          id: `STK-OUT-${2000 + index}`,
-          tanggal: new Date(dateStr),
-          tipe: 'Keluar',
-          sumberTujuan: salesName,
-          jumlah: totalQty,
-          keterangan: `Ambil barang sales untuk pengiriman area`,
-          sumberInput: 'Spreadsheet'
-        });
-        index++;
-      });
-    });
-
-    // 3. Some other promotional/sample outflows
+    // 2. Some other promotional/sample outflows
     const otherOutflows = [
       { daysOffset: 15, qty: 50, dest: 'Tim Promosi', desc: 'Sempel promosi event car free day' },
       { daysOffset: 8, qty: 30, dest: 'Retur Rusak', desc: 'Pemusnahan rokok penyok / cacat segel' },
