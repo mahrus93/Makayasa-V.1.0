@@ -1,8 +1,103 @@
 rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
+    
+    // Global Safety Net
     match /{document=**} {
-      allow read, write: if true;
+      allow read, write: if false;
+    }
+
+    // Common Validation Helpers
+    function incoming() {
+      return request.resource.data;
+    }
+    
+    function isStringWithSize(val, max) {
+      return val is string && val.size() <= max;
+    }
+    
+    function isNumberWithLimit(val, max) {
+      return val is number && val >= 0 && val <= max;
+    }
+
+    // 1. Sales Deposits Validation
+    function isValidSalesDeposit(data) {
+      return data.keys().hasAll(['id', 'tanggal', 'salesName', 'jumlahSetoran', 'jumlahPacks'])
+        && isStringWithSize(data.id, 128)
+        && isStringWithSize(data.tanggal, 128)
+        && isStringWithSize(data.salesName, 128)
+        && isNumberWithLimit(data.jumlahSetoran, 1000000000)
+        && isNumberWithLimit(data.jumlahPacks, 1000000);
+    }
+
+    match /sales_deposits/{depositId} {
+      allow read: if true;
+      allow create, update: if isValidSalesDeposit(incoming());
+      allow delete: if true;
+    }
+
+    // 2. Expenses Validation
+    function isValidExpense(data) {
+      return data.keys().hasAll(['id', 'tanggal', 'kategori', 'jumlah'])
+        && isStringWithSize(data.id, 128)
+        && isStringWithSize(data.tanggal, 128)
+        && isStringWithSize(data.kategori, 128)
+        && isNumberWithLimit(data.jumlah, 1000000000);
+    }
+
+    match /expenses/{expenseId} {
+      allow read: if true;
+      allow create, update: if isValidExpense(incoming());
+      allow delete: if true;
+    }
+
+    // 3. Freelance Records Validation
+    function isValidFreelanceRecord(data) {
+      return data.keys().hasAll(['id', 'tanggal', 'nama', 'kehadiran'])
+        && isStringWithSize(data.id, 128)
+        && isStringWithSize(data.tanggal, 128)
+        && isStringWithSize(data.nama, 128)
+        && isStringWithSize(data.kehadiran, 128);
+    }
+
+    match /freelance_records/{recordId} {
+      allow read: if true;
+      allow create, update: if isValidFreelanceRecord(incoming());
+      allow delete: if true;
+    }
+
+    // 4. Stok Gudang Validation
+    function isValidStokGudang(data) {
+      return data.keys().hasAll(['id', 'tanggal', 'namaBarang', 'stokAwal', 'stokMasuk', 'stokKeluar', 'stokAkhir', 'type'])
+        && isStringWithSize(data.id, 128)
+        && isStringWithSize(data.tanggal, 128)
+        && isStringWithSize(data.namaBarang, 128)
+        && isNumberWithLimit(data.stokAwal, 1000000)
+        && isNumberWithLimit(data.stokMasuk, 1000000)
+        && isNumberWithLimit(data.stokKeluar, 1000000)
+        && isNumberWithLimit(data.stokAkhir, 1000000)
+        && (data.type == 'gudang' || data.type == 'sales');
+    }
+
+    match /stok_gudang/{stokId} {
+      allow read: if true;
+      allow create, update: if isValidStokGudang(incoming());
+      allow delete: if true;
+    }
+
+    // 5. Owner Config Validation
+    function isValidOwnerConfig(data) {
+      return data.keys().hasAll(['pricePerPack', 'targetMingguan', 'loginPassword'])
+        && isNumberWithLimit(data.pricePerPack, 1000000)
+        && isNumberWithLimit(data.targetMingguan, 1000000)
+        && isStringWithSize(data.loginPassword, 128);
+    }
+
+    match /owner_config/{configId} {
+      allow read: if true;
+      allow create, update: if isValidOwnerConfig(incoming());
+      allow delete: if true;
     }
   }
 }
+

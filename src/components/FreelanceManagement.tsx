@@ -97,51 +97,60 @@ export default function FreelanceManagement({ pricePerPack = 25000 }: FreelanceM
     if (saved) {
       loadFreelanceRecords();
     } else {
-      // Seed initial dummy freelance records for realistic look and demo
-      const seed: FreelanceRecord[] = [
-        {
-          id: 'FL-20260620-1',
-          tanggalAmbil: new Date('2026-06-20'),
-          namaFreelance: 'Budi Santoso',
-          qtyPacks: 100,
-          pricePerPack: 25000,
-          totalOmset: 2500000,
-          statusPembayaran: 'Lunas',
-          jumlahDibayar: 2500000,
-          kurangBayar: 0,
-          potongStokGudang: true,
-          keterangan: 'Setoran lunas h+2 pengambilan barang',
-          tanggalLunas: new Date('2026-06-22')
-        },
-        {
-          id: 'FL-20260624-2',
-          tanggalAmbil: new Date('2026-06-24'),
-          namaFreelance: 'Agus Salim',
-          qtyPacks: 50,
-          pricePerPack: 25000,
-          totalOmset: 1250000,
-          statusPembayaran: 'Cicil',
-          jumlahDibayar: 500000,
-          kurangBayar: 750000,
-          potongStokGudang: true,
-          keterangan: 'Ambil rokok filter, titip dp 500rb'
-        },
-        {
-          id: 'FL-20260625-3',
-          tanggalAmbil: new Date('2026-06-25'),
-          namaFreelance: 'Doni Yusuf',
-          qtyPacks: 80,
-          pricePerPack: 25000,
-          totalOmset: 2000000,
-          statusPembayaran: 'Belum Bayar',
-          jumlahDibayar: 0,
-          kurangBayar: 2000000,
-          potongStokGudang: true,
-          keterangan: 'Ambil rokok kretek, janji setoran senin'
-        }
-      ];
-      setRecords(seed);
-      localStorage.setItem(STORAGE_FREELANCE_KEY, JSON.stringify(seed));
+      const localConfigRaw = localStorage.getItem('makayasa_owner_config');
+      const isLive = localConfigRaw ? JSON.parse(localConfigRaw).mode === 'live' : true;
+      const isCloudSync = localStorage.getItem('makayasa_cloud_sync_enabled') === 'true';
+
+      if (isLive || isCloudSync) {
+        setRecords([]);
+        localStorage.setItem(STORAGE_FREELANCE_KEY, JSON.stringify([]));
+      } else {
+        // Seed initial dummy freelance records for realistic look and demo
+        const seed: FreelanceRecord[] = [
+          {
+            id: 'FL-20260620-1',
+            tanggalAmbil: new Date('2026-06-20'),
+            namaFreelance: 'Budi Santoso',
+            qtyPacks: 100,
+            pricePerPack: 25000,
+            totalOmset: 2500000,
+            statusPembayaran: 'Lunas',
+            jumlahDibayar: 2500000,
+            kurangBayar: 0,
+            potongStokGudang: true,
+            keterangan: 'Setoran lunas h+2 pengambilan barang',
+            tanggalLunas: new Date('2026-06-22')
+          },
+          {
+            id: 'FL-20260624-2',
+            tanggalAmbil: new Date('2026-06-24'),
+            namaFreelance: 'Agus Salim',
+            qtyPacks: 50,
+            pricePerPack: 25000,
+            totalOmset: 1250000,
+            statusPembayaran: 'Cicil',
+            jumlahDibayar: 500000,
+            kurangBayar: 750000,
+            potongStokGudang: true,
+            keterangan: 'Ambil rokok filter, titip dp 500rb'
+          },
+          {
+            id: 'FL-20260625-3',
+            tanggalAmbil: new Date('2026-06-25'),
+            namaFreelance: 'Doni Yusuf',
+            qtyPacks: 80,
+            pricePerPack: 25000,
+            totalOmset: 2000000,
+            statusPembayaran: 'Belum Bayar',
+            jumlahDibayar: 0,
+            kurangBayar: 2000000,
+            potongStokGudang: true,
+            keterangan: 'Ambil rokok kretek, janji setoran senin'
+          }
+        ];
+        setRecords(seed);
+        localStorage.setItem(STORAGE_FREELANCE_KEY, JSON.stringify(seed));
+      }
     }
   }, []);
 

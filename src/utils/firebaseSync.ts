@@ -128,116 +128,240 @@ async function syncLocalToServer(key: string, rawValue: string | null) {
  * Initialize listeners for each Firestore collection
  */
 export function initializeFirebaseSync() {
+  const isEnabled = localStorage.getItem('makayasa_cloud_sync_enabled') === 'true';
+  if (!isEnabled) {
+    console.log('Firebase Sync: Cloud synchronization is currently disabled by user.');
+    return;
+  }
+
   console.log('Firebase Sync: Initializing real-time cross-device synchronization...');
 
-  // --- 1. SET UP REAL-TIME LISTENERS (SERVER -> CLIENT) ---
-  
-  // A. Listen to standard collection lists
-  Object.entries(SYNC_KEYS).forEach(([localKey, collectionName]) => {
-    // Unsubscribe if listener exists
-    if (activeListeners[localKey]) {
-      activeListeners[localKey]();
-    }
-
-    activeListeners[localKey] = onSnapshot(collection(db, collectionName), (snapshot) => {
-      try {
-        const serverData = snapshot.docs.map(doc => doc.data());
-        const currentLocalRaw = localStorage.getItem(localKey);
-        const currentLocal = currentLocalRaw ? JSON.parse(currentLocalRaw) : [];
-
-        const finalArray = serverData;
-
-        // Avoid rewrite if equal
-        if (!isDataEqual(currentLocal, finalArray)) {
-          isSyncingFromServer = true;
-          localStorage.setItem(localKey, JSON.stringify(finalArray));
-          isSyncingFromServer = false;
-
-          console.log(`Firebase Sync: Collection ${collectionName} updated from server. Syncing local state.`);
-          // Trigger React component re-render
-          window.dispatchEvent(new CustomEvent('makayasa_sync_update', { detail: { key: localKey } }));
-        }
-      } catch (err) {
-        console.error(`Firebase Sync: Error in listener for ${collectionName}`, err);
-      }
-    });
-  });
-
-  // B. Listen to owner config
-  if (activeListeners[CONFIG_KEY]) {
-    activeListeners[CONFIG_KEY]();
-  }
-  activeListeners[CONFIG_KEY] = onSnapshot(doc(db, 'owner_config', 'global'), (docSnap) => {
+  // Start initialization IIFE to perform safe pre-reconciliation before launching real-time listeners
+  (async () => {
     try {
-      if (docSnap.exists()) {
-        const serverConfig = docSnap.data();
-        const localConfigRaw = localStorage.getItem(CONFIG_KEY);
-        const localConfig = localConfigRaw ? JSON.parse(localConfigRaw) : null;
-
-        if (!isDataEqual(localConfig, serverConfig)) {
-          isSyncingFromServer = true;
-          localStorage.setItem(CONFIG_KEY, JSON.stringify(serverConfig));
-          isSyncingFromServer = false;
-
-          console.log('Firebase Sync: Config updated from server.');
-          window.dispatchEvent(new CustomEvent('makayasa_sync_update', { detail: { key: CONFIG_KEY } }));
-        }
-      }
-    } catch (err) {
-      console.error('Firebase Sync: Error in config listener', err);
-    }
-  });
-
-  // --- 2. SET UP INTERCEPTORS (CLIENT -> SERVER) ---
-  
-  // Override localStorage.setItem
-  const originalSetItem = localStorage.setItem;
-  localStorage.setItem = function (key: string, value: string) {
-    originalSetItem.apply(this, [key, value]);
-    
-    if (SYNC_KEYS[key] || key === CONFIG_KEY) {
-      syncLocalToServer(key, value);
-    }
-  };
-
-  // Override localStorage.removeItem
-  const originalRemoveItem = localStorage.removeItem;
-  localStorage.removeItem = function (key: string) {
-    originalRemoveItem.apply(this, [key]);
-    
-    if (SYNC_KEYS[key] || key === CONFIG_KEY) {
-      syncLocalToServer(key, null);
-    }
-  };
-
-  // --- 3. FORCE INITIAL UPLOAD FOR PRE-EXISTING LOCAL DATA ---
-  // If server database is empty, seed it with the current device's local data
-  // so the user doesn't lose anything on initial hookup.
-  setTimeout(async () => {
-    try {
-      // Check config
-      const serverConfigSnap = await getDocs(collection(db, 'owner_config'));
-      if (serverConfigSnap.empty) {
-        const localConfigRaw = localStorage.getItem(CONFIG_KEY);
+      console.log('Firebase Sync: Performing safe pre-reconciliation check...');
+      
+      // A. Reconcile Configuration
+      const configSnap = await getDocs(collection(db, 'owner_config'));
+      const localConfigRaw = localStorage.getItem(CONFIG_KEY);
+      if (configSnap.empty) {
         if (localConfigRaw) {
-          console.log('Firebase Sync: Seeding server with local config...');
+          console.log('Firebase Sync Init: Uploading local config to empty server...');
           await syncLocalToServer(CONFIG_KEY, localConfigRaw);
         }
-      }
-
-      // Check lists
-      for (const [localKey, collectionName] of Object.entries(SYNC_KEYS)) {
-        const serverSnap = await getDocs(collection(db, collectionName));
-        if (serverSnap.empty) {
-          const localDataRaw = localStorage.getItem(localKey);
-          if (localDataRaw && JSON.parse(localDataRaw).length > 0) {
-            console.log(`Firebase Sync: Seeding server with local ${collectionName}...`);
-            await syncLocalToServer(localKey, localDataRaw);
+      } else {
+        const serverConfig = configSnap.docs.map(doc => doc.data())[0];
+        if (serverConfig) {
+          const localConfig = localConfigRaw ? JSON.parse(localConfigRaw) : null;
+          if (!isDataEqual(localConfig, serverConfig)) {
+            console.log('Firebase Sync Init: Downloading config from server...');
+            localStorage.setItem(CONFIG_KEY, JSON.stringify(serverConfig));
+            window.dispatchEvent(new CustomEvent('makayasa_sync_update', { detail: { key: CONFIG_KEY } }));
           }
         }
       }
+
+      // B. Reconcile Collections (Sales Deposits, Expenses, Freelance, Stock)
+      for (const [localKey, collectionName] of Object.entries(SYNC_KEYS)) {
+        const serverSnap = await getDocs(collection(db, collectionName));
+        const localDataRaw = localStorage.getItem(localKey);
+        const localArray = localDataRaw ? JSON.parse(localDataRaw) : [];
+
+        if (serverSnap.empty) {
+          // If server collection is empty but client has local records, upload them immediately
+          if (Array.isArray(localArray) && localArray.length > 0) {
+            console.log(`Firebase Sync Init: Seeding server collection "${collectionName}" with ${localArray.length} local records...`);
+            await syncLocalToServer(localKey, localDataRaw);
+          }
+        } else {
+          // If server has records, we merge local and server records instead of a destructive overwrite.
+          // This ensures that any records created on this client (e.g. sales deposits recorded offline or before syncing)
+          // are safely merged and uploaded, rather than being wiped out!
+          const serverArray = serverSnap.docs.map(doc => doc.data());
+          let mergedArray = [...localArray];
+          let updated = false;
+
+          serverArray.forEach((serverItem: any) => {
+            const exists = mergedArray.some((localItem: any) => localItem.id === serverItem.id);
+            if (!exists) {
+              mergedArray.push(serverItem);
+              updated = true;
+            }
+          });
+
+          // Upload local-only items to server so other devices get them too
+          const serverIds = serverArray.map((d: any) => d.id);
+          const localOnlyItems = localArray.filter((l: any) => l.id && !serverIds.includes(l.id));
+          if (localOnlyItems.length > 0) {
+            console.log(`Firebase Sync Init: Seeding ${localOnlyItems.length} local-only items to server collection "${collectionName}"...`);
+            await syncLocalToServer(localKey, JSON.stringify(mergedArray));
+          }
+
+          if (updated || !isDataEqual(localArray, mergedArray)) {
+            console.log(`Firebase Sync Init: Merging server records into local storage for "${collectionName}"`);
+            localStorage.setItem(localKey, JSON.stringify(mergedArray));
+            window.dispatchEvent(new CustomEvent('makayasa_sync_update', { detail: { key: localKey } }));
+          }
+        }
+      }
+      
+      console.log('Firebase Sync: Pre-reconciliation completed successfully. Setting up live snapshot listeners.');
     } catch (err) {
-      console.error('Firebase Sync: Error during initial seed check', err);
+      console.error('Firebase Sync: Error during pre-reconciliation, proceeding with snapshot listeners...', err);
     }
-  }, 3000);
+
+    // --- 1. SET UP REAL-TIME LISTENERS (SERVER -> CLIENT) ---
+    
+    // A. Listen to standard collection lists
+    Object.entries(SYNC_KEYS).forEach(([localKey, collectionName]) => {
+      // Unsubscribe if listener exists
+      if (activeListeners[localKey]) {
+        activeListeners[localKey]();
+      }
+
+      activeListeners[localKey] = onSnapshot(collection(db, collectionName), (snapshot) => {
+        try {
+          const serverData = snapshot.docs.map(doc => doc.data());
+          const currentLocalRaw = localStorage.getItem(localKey);
+          const currentLocal = currentLocalRaw ? JSON.parse(currentLocalRaw) : [];
+
+          const finalArray = serverData;
+
+          // Avoid rewrite if equal
+          if (!isDataEqual(currentLocal, finalArray)) {
+            isSyncingFromServer = true;
+            localStorage.setItem(localKey, JSON.stringify(finalArray));
+            isSyncingFromServer = false;
+
+            console.log(`Firebase Sync: Collection ${collectionName} updated from server. Syncing local state.`);
+            // Trigger React component re-render
+            window.dispatchEvent(new CustomEvent('makayasa_sync_update', { detail: { key: localKey } }));
+          }
+        } catch (err) {
+          console.error(`Firebase Sync: Error in listener for ${collectionName}`, err);
+        }
+      });
+    });
+
+    // B. Listen to owner config
+    if (activeListeners[CONFIG_KEY]) {
+      activeListeners[CONFIG_KEY]();
+    }
+    activeListeners[CONFIG_KEY] = onSnapshot(doc(db, 'owner_config', 'global'), (docSnap) => {
+      try {
+        if (docSnap.exists()) {
+          const serverConfig = docSnap.data();
+          const localConfigRaw = localStorage.getItem(CONFIG_KEY);
+          const localConfig = localConfigRaw ? JSON.parse(localConfigRaw) : null;
+
+          if (!isDataEqual(localConfig, serverConfig)) {
+            isSyncingFromServer = true;
+            localStorage.setItem(CONFIG_KEY, JSON.stringify(serverConfig));
+            isSyncingFromServer = false;
+
+            console.log('Firebase Sync: Config updated from server.');
+            window.dispatchEvent(new CustomEvent('makayasa_sync_update', { detail: { key: CONFIG_KEY } }));
+          }
+        }
+      } catch (err) {
+        console.error('Firebase Sync: Error in config listener', err);
+      }
+    });
+  })();
 }
+
+// --- 2. SET UP INTERCEPTORS (CLIENT -> SERVER) ---
+
+// Override localStorage.setItem
+const originalSetItem = localStorage.setItem;
+localStorage.setItem = function (key: string, value: string) {
+  originalSetItem.apply(this, [key, value]);
+  
+  const isEnabled = localStorage.getItem('makayasa_cloud_sync_enabled') === 'true';
+  if (isEnabled && (SYNC_KEYS[key] || key === CONFIG_KEY)) {
+    syncLocalToServer(key, value);
+  }
+};
+
+// Override localStorage.removeItem
+const originalRemoveItem = localStorage.removeItem;
+localStorage.removeItem = function (key: string) {
+  originalRemoveItem.apply(this, [key]);
+  
+  const isEnabled = localStorage.getItem('makayasa_cloud_sync_enabled') === 'true';
+  if (isEnabled && (SYNC_KEYS[key] || key === CONFIG_KEY)) {
+    syncLocalToServer(key, null);
+  }
+};
+
+/**
+ * Stop all active firestore snapshot listeners
+ */
+export function disableFirebaseSync() {
+  console.log('Firebase Sync: Disabling real-time synchronization...');
+  Object.keys(activeListeners).forEach(key => {
+    if (activeListeners[key]) {
+      activeListeners[key]();
+      delete activeListeners[key];
+    }
+  });
+}
+
+/**
+ * Manually force a bidirectional synchronization
+ */
+export async function forceManualSync(): Promise<{ success: boolean; message: string }> {
+  try {
+    // Force write current local configurations and states to Firestore, or pull from Firestore if it exists
+    for (const [localKey, collectionName] of Object.entries(SYNC_KEYS)) {
+      const serverSnap = await getDocs(collection(db, collectionName));
+      const localDataRaw = localStorage.getItem(localKey);
+      
+      if (serverSnap.empty && localDataRaw && JSON.parse(localDataRaw).length > 0) {
+        console.log(`Firebase Sync Manual: Seeding ${collectionName} with local data`);
+        await syncLocalToServer(localKey, localDataRaw);
+      } else if (!serverSnap.empty) {
+        const serverData = serverSnap.docs.map(doc => doc.data());
+        localStorage.setItem(localKey, JSON.stringify(serverData));
+        window.dispatchEvent(new CustomEvent('makayasa_sync_update', { detail: { key: localKey } }));
+      }
+    }
+
+    // Config Sync
+    const configSnap = await getDocs(collection(db, 'owner_config'));
+    const localConfigRaw = localStorage.getItem(CONFIG_KEY);
+    if (configSnap.empty && localConfigRaw) {
+      await syncLocalToServer(CONFIG_KEY, localConfigRaw);
+    } else if (!configSnap.empty) {
+      const serverConfig = configSnap.docs.map(doc => doc.data())[0];
+      if (serverConfig) {
+        localStorage.setItem(CONFIG_KEY, JSON.stringify(serverConfig));
+        window.dispatchEvent(new CustomEvent('makayasa_sync_update', { detail: { key: CONFIG_KEY } }));
+      }
+    }
+
+    return { success: true, message: 'Sinkronisasi Cloud berhasil diselesaikan!' };
+  } catch (err: any) {
+    console.error('Firebase Sync Manual: Failed', err);
+    return { success: false, message: `Gagal sinkronisasi: ${err.message || err}` };
+  }
+}
+
+/**
+ * Retrieve current document counts on Firestore database
+ */
+export async function getCloudStats(): Promise<Record<string, number>> {
+  const stats: Record<string, number> = {};
+  try {
+    for (const [_, collectionName] of Object.entries(SYNC_KEYS)) {
+      const snap = await getDocs(collection(db, collectionName));
+      stats[collectionName] = snap.size;
+    }
+    const configSnap = await getDocs(collection(db, 'owner_config'));
+    stats['owner_config'] = configSnap.size;
+  } catch (err) {
+    console.error('Firebase Sync: Failed to fetch cloud stats', err);
+  }
+  return stats;
+}
+

@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { motion } from 'motion/react';
 import { 
   Settings, 
@@ -18,9 +18,19 @@ import {
   Upload,
   Share2,
   Smartphone,
-  Laptop
+  Laptop,
+  Cloud,
+  CloudOff,
+  Activity,
+  Server
 } from 'lucide-react';
 import { AppConfig } from '../types';
+import { 
+  initializeFirebaseSync, 
+  disableFirebaseSync, 
+  forceManualSync, 
+  getCloudStats 
+} from '../utils/firebaseSync';
 
 interface SistemPengaturanProps {
   config: AppConfig;
@@ -47,6 +57,57 @@ export default function SistemPengaturan({ config, setConfig, onResetToDefault }
 
   const [saved, setSaved] = useState(false);
   const [backupMessage, setBackupMessage] = useState<{ text: string; type: 'success' | 'error' } | null>(null);
+
+  // Cloud Sync states
+  const [cloudSyncEnabled, setCloudSyncEnabled] = useState<boolean>(() => {
+    return localStorage.getItem('makayasa_cloud_sync_enabled') === 'true';
+  });
+  const [syncing, setSyncing] = useState(false);
+  const [dbStats, setDbStats] = useState<Record<string, number> | null>(null);
+  const [syncStatusMsg, setSyncStatusMsg] = useState<{ text: string; type: 'success' | 'error' } | null>(null);
+
+  // Fetch Stats on mount or when cloud sync is enabled
+  useEffect(() => {
+    if (cloudSyncEnabled) {
+      getCloudStats().then(stats => {
+        setDbStats(stats);
+      });
+    }
+  }, [cloudSyncEnabled]);
+
+  const toggleCloudSync = () => {
+    const nextVal = !cloudSyncEnabled;
+    setCloudSyncEnabled(nextVal);
+    localStorage.setItem('makayasa_cloud_sync_enabled', String(nextVal));
+    if (nextVal) {
+      initializeFirebaseSync();
+      getCloudStats().then(stats => setDbStats(stats));
+    } else {
+      disableFirebaseSync();
+      setDbStats(null);
+    }
+  };
+
+  const handleManualCloudSync = async () => {
+    setSyncing(true);
+    setSyncStatusMsg(null);
+    try {
+      const res = await forceManualSync();
+      if (res.success) {
+        setSyncStatusMsg({ text: res.message, type: 'success' });
+        const stats = await getCloudStats();
+        setDbStats(stats);
+      } else {
+        setSyncStatusMsg({ text: res.message, type: 'error' });
+      }
+    } catch (err: any) {
+      setSyncStatusMsg({ text: `Gagal: ${err.message || err}`, type: 'error' });
+    } finally {
+      setSyncing(false);
+      setTimeout(() => setSyncStatusMsg(null), 5000);
+    }
+  };
+
 
   // 1. Export Data to JSON File
   const handleExportData = () => {
@@ -379,6 +440,113 @@ export default function SistemPengaturan({ config, setConfig, onResetToDefault }
       {/* Information side cards (1/3 width) */}
       <div className="space-y-6">
         
+        {/* Card Sinkronisasi Cloud (Firebase Firestore) */}
+        <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-100 dark:border-slate-800/80 p-6 shadow-sm space-y-4">
+          <div className="flex items-center justify-between">
+            <h4 className="text-sm font-bold text-slate-900 dark:text-white flex items-center gap-2">
+              <Cloud className="text-amber-500 w-5 h-5 shrink-0" />
+              <span>Sinkronisasi Cloud (Firebase)</span>
+            </h4>
+            
+            {/* Status indicator with pulsing animation */}
+            <div className="flex items-center gap-1.5">
+              <span className="relative flex h-2 w-2">
+                {cloudSyncEnabled ? (
+                  <>
+                    <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+                    <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
+                  </>
+                ) : (
+                  <span className="relative inline-flex rounded-full h-2 w-2 bg-slate-300 dark:bg-slate-600"></span>
+                )}
+              </span>
+              <span className={`text-[10px] font-bold uppercase tracking-wider ${cloudSyncEnabled ? 'text-emerald-500' : 'text-slate-400 dark:text-slate-500'}`}>
+                {cloudSyncEnabled ? 'Aktif' : 'Nonaktif'}
+              </span>
+            </div>
+          </div>
+
+          <p className="text-xs text-slate-500 dark:text-slate-400 leading-relaxed font-semibold">
+            Aktifkan fitur sinkronisasi cloud untuk menyimpan data secara otomatis dan aman di database Firestore. Ini memungkinkan data setoran, kas, pengeluaran, dan stok Anda sinkron secara real-time di semua HP & Laptop Anda!
+          </p>
+
+          {/* Cloud Toggle Switch */}
+          <div className="flex items-center justify-between p-3 bg-slate-50 dark:bg-slate-950 rounded-xl border border-slate-100 dark:border-slate-800/60">
+            <div className="flex items-center gap-2.5">
+              {cloudSyncEnabled ? (
+                <Server className="w-5 h-5 text-emerald-500 shrink-0" />
+              ) : (
+                <CloudOff className="w-5 h-5 text-slate-400 shrink-0" />
+              )}
+              <div className="min-w-0">
+                <span className="block text-[11px] font-bold text-slate-700 dark:text-slate-300">Status Sinkronisasi</span>
+                <span className="text-[9px] text-slate-400 dark:text-slate-500 font-medium block mt-0.5 truncate">
+                  {cloudSyncEnabled ? 'Real-time aktif & memantau data' : 'Data hanya disimpan lokal di browser'}
+                </span>
+              </div>
+            </div>
+
+            {/* Premium Toggle Switch Button */}
+            <button
+              type="button"
+              onClick={toggleCloudSync}
+              className={`relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none ${cloudSyncEnabled ? 'bg-amber-500' : 'bg-slate-200 dark:bg-slate-800'}`}
+            >
+              <span
+                className={`pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white dark:bg-slate-100 shadow ring-0 transition duration-200 ease-in-out ${cloudSyncEnabled ? 'translate-x-5' : 'translate-x-0'}`}
+              />
+            </button>
+          </div>
+
+          {/* Sync Stats - ONLY show when active */}
+          {cloudSyncEnabled && dbStats && (
+            <div className="p-3 bg-slate-50 dark:bg-slate-950 rounded-xl border border-slate-100 dark:border-slate-800/60 space-y-2">
+              <span className="text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-wider block">Catatan Terdeteksi di Cloud:</span>
+              <div className="grid grid-cols-2 gap-2 text-[11px] font-semibold text-slate-600 dark:text-slate-300 font-mono">
+                <div className="flex justify-between border-r border-slate-200 dark:border-slate-800 pr-2">
+                  <span>Setoran:</span>
+                  <span className="font-bold text-amber-500">{dbStats.sales_deposits ?? 0}</span>
+                </div>
+                <div className="flex justify-between pl-1">
+                  <span>Pengeluaran:</span>
+                  <span className="font-bold text-amber-500">{dbStats.expenses ?? 0}</span>
+                </div>
+                <div className="flex justify-between border-r border-slate-200 dark:border-slate-800 pr-2 pt-1">
+                  <span>Freelance:</span>
+                  <span className="font-bold text-amber-500">{dbStats.freelance_records ?? 0}</span>
+                </div>
+                <div className="flex justify-between pl-1 pt-1">
+                  <span>Stok:</span>
+                  <span className="font-bold text-amber-500">{dbStats.stok_gudang ?? 0}</span>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {syncStatusMsg && (
+            <div className={`p-3 rounded-xl text-xs font-bold ${
+              syncStatusMsg.type === 'success' ? 'bg-emerald-50 dark:bg-emerald-950/25 border border-emerald-150 dark:border-emerald-800/60 text-emerald-800 dark:text-emerald-400' : 'bg-rose-50 dark:bg-rose-950/25 border border-rose-150 dark:border-rose-800/60 text-rose-800 dark:text-rose-400'
+            }`}>
+              {syncStatusMsg.text}
+            </div>
+          )}
+
+          {/* Manual Force Sync Button */}
+          <button
+            type="button"
+            disabled={!cloudSyncEnabled || syncing}
+            onClick={handleManualCloudSync}
+            className={`w-full py-2.5 font-bold rounded-xl text-xs transition-all flex items-center justify-center gap-2 shadow-sm ${
+              cloudSyncEnabled 
+                ? 'bg-amber-500 hover:bg-amber-400 text-slate-950 active:scale-98' 
+                : 'bg-slate-100 dark:bg-slate-800 text-slate-400 dark:text-slate-600 cursor-not-allowed'
+            }`}
+          >
+            <RefreshCw className={`w-4 h-4 ${syncing ? 'animate-spin' : ''}`} />
+            <span>{syncing ? 'Sinkronisasi Ulang...' : 'Sinkronkan Sekarang'}</span>
+          </button>
+        </div>
+
         {/* Card Sinkronisasi Antar Perangkat */}
         <div className="bg-white rounded-2xl border border-slate-100 p-6 shadow-sm space-y-4">
           <h4 className="text-sm font-bold text-slate-900 flex items-center gap-2">

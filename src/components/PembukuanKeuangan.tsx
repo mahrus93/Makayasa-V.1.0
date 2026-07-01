@@ -87,32 +87,41 @@ export default function PembukuanKeuangan() {
         console.error('Error parsing expenses', e);
       }
     } else {
-      // Seed some dummy expenses for professional look on first visit
-      const seedExpenses: ExpenseRecord[] = [
-        {
-          id: 'EXP-101',
-          tanggal: new Date('2026-06-15T10:00:00'),
-          kategori: 'Transfer Pabrik',
-          nominal: 1200000,
-          keterangan: 'Transfer pembayaran bahan baku rokok ke pabrik pusat'
-        },
-        {
-          id: 'EXP-102',
-          tanggal: new Date('2026-06-20T14:30:00'),
-          kategori: 'Marketing',
-          nominal: 150000,
-          keterangan: 'Cetak pamflet promosi & banner outlet baru'
-        },
-        {
-          id: 'EXP-103',
-          tanggal: new Date('2026-06-24T09:00:00'),
-          kategori: 'Operasional',
-          nominal: 80000,
-          keterangan: 'Uang bensin tambahan pengiriman darurat luar area'
-        }
-      ];
-      setExpenses(seedExpenses);
-      localStorage.setItem(STORAGE_EXPENSES_KEY, JSON.stringify(seedExpenses));
+      const localConfigRaw = localStorage.getItem('makayasa_owner_config');
+      const isLive = localConfigRaw ? JSON.parse(localConfigRaw).mode === 'live' : true;
+      const isCloudSync = localStorage.getItem('makayasa_cloud_sync_enabled') === 'true';
+
+      if (isLive || isCloudSync) {
+        setExpenses([]);
+        localStorage.setItem(STORAGE_EXPENSES_KEY, JSON.stringify([]));
+      } else {
+        // Seed some dummy expenses for professional look on first visit in demo/simulated mode
+        const seedExpenses: ExpenseRecord[] = [
+          {
+            id: 'EXP-101',
+            tanggal: new Date('2026-06-15T10:00:00'),
+            kategori: 'Transfer Pabrik',
+            nominal: 1200000,
+            keterangan: 'Transfer pembayaran bahan baku rokok ke pabrik pusat'
+          },
+          {
+            id: 'EXP-102',
+            tanggal: new Date('2026-06-20T14:30:00'),
+            kategori: 'Marketing',
+            nominal: 150000,
+            keterangan: 'Cetak pamflet promosi & banner outlet baru'
+          },
+          {
+            id: 'EXP-103',
+            tanggal: new Date('2026-06-24T09:00:00'),
+            kategori: 'Operasional',
+            nominal: 80000,
+            keterangan: 'Uang bensin tambahan pengiriman darurat luar area'
+          }
+        ];
+        setExpenses(seedExpenses);
+        localStorage.setItem(STORAGE_EXPENSES_KEY, JSON.stringify(seedExpenses));
+      }
     }
 
     // 2. Load Sales Deposits
