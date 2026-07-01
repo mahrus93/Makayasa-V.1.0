@@ -31,7 +31,7 @@ export default function FilterBar({ filter, setFilter, totalRecords }: FilterBar
   const [showAdvanced, setShowAdvanced] = useState<boolean>(false);
   const [selectedMonth, setSelectedMonth] = useState<number>(6); // Default: June
   const [selectedYear, setSelectedYear] = useState<number>(2026); // Default: 2026
-  const [cycleType, setCycleType] = useState<'calendar' | 'custom'>('custom'); // Default: Custom Cycle (15-15)
+  const [cycleType, setCycleType] = useState<'calendar' | 'custom'>('calendar'); // Default: Calendar Month (1-30) for intuitive navigation
   const [customStartDay, setCustomStartDay] = useState<number>(15); // Default: 15 (e.g. 15 May - 15 June)
 
   // Standard short names for Indonesian months

@@ -96,7 +96,9 @@ export default function App() {
 
   // Filter configuration
   const [filter, setFilter] = useState<FilterOption>({
-    type: 'month', // Default to month (Perbulan) to show plentiful rich trends
+    type: 'range',
+    startDate: '2026-06-15',
+    endDate: '2026-06-28',
   });
 
   // Data states
@@ -881,7 +883,7 @@ export default function App() {
       case 10:
         return <OperasionalSales transactions={filteredTransactions} salesNames={finalSalesNames} />;
       case 14:
-        return <SetoranSales transactions={filteredTransactions} salesNames={finalSalesNames} />;
+        return <SetoranSales transactions={rawTransactions} salesNames={finalSalesNames} />;
       case 15:
         return <PembukuanKeuangan />;
       case 11:

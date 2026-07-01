@@ -310,19 +310,44 @@ export function disableFirebaseSync() {
 /**
  * Manually force a bidirectional synchronization
  */
+function mergeArraysById(local: any[], server: any[]): any[] {
+  const merged = [...local];
+  server.forEach(serverItem => {
+    const localIndex = merged.findIndex(localItem => localItem.id === serverItem.id);
+    if (localIndex === -1) {
+      merged.push(serverItem);
+    } else {
+      // If item exists in both, merge them together favoring local edits
+      merged[localIndex] = { ...serverItem, ...merged[localIndex] };
+    }
+  });
+  return merged;
+}
+
 export async function forceManualSync(): Promise<{ success: boolean; message: string }> {
   try {
     // Force write current local configurations and states to Firestore, or pull from Firestore if it exists
     for (const [localKey, collectionName] of Object.entries(SYNC_KEYS)) {
       const serverSnap = await getDocs(collection(db, collectionName));
       const localDataRaw = localStorage.getItem(localKey);
-      
-      if (serverSnap.empty && localDataRaw && JSON.parse(localDataRaw).length > 0) {
+      const localArray = localDataRaw ? JSON.parse(localDataRaw) : [];
+      const serverArray = serverSnap.docs.map(doc => doc.data());
+
+      // Merge local and server data safely
+      const mergedArray = mergeArraysById(localArray, serverArray);
+
+      // Check if there are local-only items to upload
+      const serverIds = serverArray.map((d: any) => d.id);
+      const hasLocalOnly = localArray.some((l: any) => l.id && !serverIds.includes(l.id));
+
+      if (hasLocalOnly) {
         console.log(`Firebase Sync Manual: Seeding ${collectionName} with local data`);
-        await syncLocalToServer(localKey, localDataRaw);
-      } else if (!serverSnap.empty) {
-        const serverData = serverSnap.docs.map(doc => doc.data());
-        localStorage.setItem(localKey, JSON.stringify(serverData));
+        await syncLocalToServer(localKey, JSON.stringify(mergedArray));
+      }
+
+      // Update local storage with the merged result if there are differences
+      if (!isDataEqual(localArray, mergedArray)) {
+        localStorage.setItem(localKey, JSON.stringify(mergedArray));
         window.dispatchEvent(new CustomEvent('makayasa_sync_update', { detail: { key: localKey } }));
       }
     }
